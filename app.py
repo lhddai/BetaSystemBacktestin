@@ -200,8 +200,8 @@ def run_backtest(symbol, initial_capital=100000.0):
 
 # ==================== Streamlit UI ====================
 
-st.set_page_config(page_title="A股自定义指标回测系统", layout="wide")
-st.title("📈 A股自定义指标回测系统")
+st.set_page_config(page_title="贝塔系统回测", layout="wide")
+st.title("📈 贝塔系统回测")
 
 col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
@@ -229,14 +229,16 @@ if 'result' in st.session_state:
     st.subheader(f"{symbol} {r['stock_name']} 回测统计 (最近一年)")
 
     # 统计卡片
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("指标策略收益率", f"{r['strategy_return']:+.2f}%")
+        st.metric("贝塔系统收益率", f"{r['strategy_return']:+.2f}%")
     with col2:
-        st.metric("买入持有收益率", f"{r['bh_return']:+.2f}%")
+        st.metric("贝塔系统最大回撤", f"{r['strategy_max_dd']:.2f}%")
     with col3:
-        st.metric("策略最大回撤", f"{r['strategy_max_dd']:.2f}%")
+        st.metric("买入持有收益率", f"{r['bh_return']:+.2f}%")
     with col4:
+        st.metric("买入持有最大回撤", f"{r['bh_max_dd']:.2f}%")
+    with col5:
         trade_count = len([t for t in r['trades'] if '买' in t['action'] or '卖' in t['action']])
         st.metric("交易次数", f"{trade_count} 次")
 
@@ -246,7 +248,7 @@ if 'result' in st.session_state:
     dates = bt_df['date']
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=dates, y=r['strategy_returns'], name='指标策略收益率', line=dict(color='red', width=2)))
+    fig.add_trace(go.Scatter(x=dates, y=r['strategy_returns'], name='贝塔系统收益率', line=dict(color='red', width=2)))
     fig.add_trace(go.Scatter(x=dates, y=r['bh_returns'], name='买入并持有收益率', line=dict(color='blue', width=2, dash='dash')))
     fig.add_hline(y=0, line_dash="dot", line_color="black", line_width=1)
 
@@ -273,6 +275,7 @@ if 'result' in st.session_state:
 
     fig.update_layout(
         xaxis_title="日期", yaxis_title="收益率 (%)",
+        xaxis=dict(tickformat="%Y.%m"),
         hovermode='x unified', height=500,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
