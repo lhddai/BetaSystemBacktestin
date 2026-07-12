@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贝塔系统回测</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root {
+    --bg: #0f1115; --card-bg: #1a1d26;
+    --text: #e8e8e8; --text-secondary: #888c99; --text-muted: #5a5e6b;
+    --red: #ff4d4f; --green: #52c41a; --blue: #4096ff;
+    --border: #2a2d38; --input-bg: #1e212e;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;
+}
+.container{max-width:900px;margin:0 auto;padding:24px 20px}
+
+/* 标题 */
+.main-title{
+    font-size:22px;font-weight:700;letter-spacing:1px;margin-bottom:22px;color:var(--text);
+}
+.main-title::before{
+    content:'';display:inline-block;width:4px;height:22px;background:var(--red);
+    margin-right:10px;vertical-align:middle;border-radius:2px;
+}
+
+/* 搜索行 */
+.search-row{
+    display:flex;gap:12px;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap;
+}
+.input-group{min-width:100px}
+.input-group label{
+    display:block;font-size:11px;color:var(--text-muted);margin-bottom:6px;letter-spacing:.5px;
+}
+.input-group input{
+    width:100%;padding:10px 14px;background:var(--input-bg);
+    border:1px solid var(--border);border-radius:6px;
+    color:var(--text);font-size:14px;font-family:'Consolas',monospace;letter-spacing:1px;
+}
+.input-group input:focus{outline:none;border-color:var(--red)}
+.input-group input::placeholder{color:var(--text-muted)}
+
+/* 资金输入组 */
+.fund-group{
+    display:flex;align-items:center;background:var(--input-bg);
+    border:1px solid var(--border);border-radius:6px;overflow:hidden;height:40px;
+}
+.fund-group input{
+    background:transparent;border:none;text-align:center;width:90px;
+    font-size:14px;font-family:'Consolas',monospace;color:var(--text);padding:8px 0;
+}
+.fund-group input:focus{outline:none}
+.fund-btn{
+    width:32px;height:100%;background:transparent;border:none;
+    color:var(--text-muted);font-size:16px;cursor:pointer;
+    transition:all .2s;display:flex;align-items:center;justify-content:center;
+}
+.fund-btn:hover{color:var(--text);background:rgba(255,255,255,.05)}.fund-btn:active{color:var(--red)}
+
+.btn-primary{
+    padding:10px 24px;background:var(--red);border:none;border-radius:6px;
+    color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;
+    transition:all .2s;white-space:nowrap;height:40px;
+}
+.btn-primary:hover:not(:disabled){
+    background:#ff6b6d;transform:translateY(-1px);box-shadow:0 4px 12px rgba(255,77,79,.3);
+}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
+
+/* 加载 */
+.loading-area{text-align:center;padding:60px;display:none}
+.loading-area.active{display:block}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--text-secondary);font-size:13px}
+
+/* 错误 */
+.error-card{
+    background:rgba(255,77,79,.08);border:1px solid rgba(255,77,79,.2);
+    border-radius:8px;padding:14px 18px;color:#ff6b6b;display:none;
+    margin-bottom:16px;font-size:13px;line-height:1.6;
+}
+.error-card.active{display:block}
+
+/* 结果区 */
+.results-area{display:none}
+.results-area.active{display:block}
+
+/* 回测标题 */
+.bt-title{
+    font-size:15px;font-weight:600;color:var(--text);margin-bottom:16px;
+    padding-bottom:12px;border-bottom:1px solid var(--border);
+}
+.bt-title .code{color:var(--text-secondary);margin-right:6px}
+.bt-title .name{color:var(--text)}
+
+/* 指标行 */
+.metrics-row{
+    display:flex;gap:0;border:1px solid var(--border);border-radius:8px;
+    overflow:hidden;margin-bottom:20px;background:var(--card-bg);
+}
+.metric-col{
+    flex:1;text-align:center;padding:14px 8px;
+    border-right:1px solid var(--border);min-width:0;
+}
+.metric-col:last-child{border-right:none}
+.metric-col .label{font-size:11px;color:var(--text-muted);margin-bottom:4px;letter-spacing:.5px}
+.metric-col .value{font-size:20px;font-weight:700;font-family:'Consolas',monospace}
+.metric-col .sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.val-red{color:var(--red)}.val-green{color:var(--green)}.val-white{color:var(--text)}
+
+/* 图表区 */
+.chart-card{
+    background:var(--card-bg);border:1px solid var(--border);
+    border-radius:8px;padding:18px;margin-bottom:20px;
+}
+.chart-card h3{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--text)}
+#chart{width:100%;height:480px}
+
+/* 明细区 */
+.detail-card{
+    background:var(--card-bg);border:1px solid var(--border);
+    border-radius:8px;padding:18px;margin-bottom:16px;
+}
+.detail-card h3{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--text)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;background:rgba(255,255,255,.03);color:var(--text-muted);font-weight:500;font-size:11px;border-bottom:1px solid var(--border);letter-spacing:.5px}
+td{padding:8px 12px;border-bottom:1px solid rgba(42,45,56,.6);color:var(--text-secondary)}
+tr:hover td{background:rgba(255,255,255,.02)}
+
+.tag{
+    display:inline-block;padding:2px 8px;border-radius:3px;
+    font-weight:600;font-size:11px;
+}
+.tag-buy{background:rgba(255,77,79,.12);color:var(--red)}
+.tag-sell{background:rgba(82,196,26,.12);color:var(--green)}
+.tag-info{background:rgba(64,150,255,.12);color:var(--blue)}
+
+/* 底部说明 */
+.footer-note{
+    display:flex;gap:24px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);
+}
+.footer-note span{display:inline-flex;align-items:center;gap:4px}
+.footer-dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+.footer-dot.red{background:var(--red)}.footer-dot.green{background:var(--green)}
+
+/* 响应式 */
+@media (max-width:680px){
+    .search-row{flex-direction:column}
+    .metrics-row{flex-wrap:wrap}
+    .metric-col{flex:1 1 50%;border-bottom:1px solid var(--border)}
+    .metric-col:nth-child(5){border-bottom:none}
+    #chart{height:340px}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="main-title">贝塔系统回测</div>
+
+    <!-- 搜索行 -->
+    <div class="search-row">
+        <div class="input-group" style="flex:0 0 120px">
+            <label>股票代码</label>
+            <input type="text" id="symbolInput" placeholder="600519" maxlength="6" value="600519" autocomplete="off">
+        </div>
+        <div class="input-group" style="flex:1;min-width:140px">
+            <label>股票名称</label>
+            <input type="text" id="nameInput" placeholder="输入代码自动获取" readonly style="opacity:.7">
+        </div>
+        <div class="input-group" style="flex:0 0 auto">
+            <label>初始资金（元）</label>
+            <div class="fund-group">
+                <button class="fund-btn" onclick="adjustFund(-10000)" title="减 1 万">−</button>
+                <input type="text" id="fundInput" value="100000" onchange="validateFund()">
+                <button class="fund-btn" onclick="adjustFund(+10000)" title="加 1 万">+</button>
+            </div>
+        </div>
+        <button class="btn-primary" id="btnStart" onclick="run()">开始回测</button>
+    </div>
+
+    <!-- 加载 -->
+    <div class="loading-area" id="loadingArea">
+        <div class="spinner"></div>
+        <p class="loading-text">正在获取数据并回测中，请稍候…</p>
+    </div>
+
+    <!-- 错误 -->
+    <div class="error-card" id="errorCard"></div>
+
+    <!-- 结果区 -->
+    <div class="results-area" id="resultsArea">
+        <!-- 回测标题 -->
+        <div class="bt-title" id="btTitle"></div>
+
+        <!-- 指标行 -->
+        <div class="metrics-row">
+            <div class="metric-col">
+                <div class="label">贝塔系统收益率</div>
+                <div class="value val-red" id="mStrategyReturn">--</div>
+                <div class="sub" id="mStrategyDD"></div>
+            </div>
+            <div class="metric-col">
+                <div class="label">贝塔最大回撤</div>
+                <div class="value val-green" id="mStrategyMaxDD">--</div>
+                <div class="sub">&nbsp;</div>
+            </div>
+            <div class="metric-col">
+                <div class="label">买入持有收益率</div>
+                <div class="value val-white" id="mBhReturn">--</div>
+                <div class="sub" id="mBhDD"></div>
+            </div>
+            <div class="metric-col">
+                <div class="label">买入持有最大回撤</div>
+                <div class="value val-green" id="mBhMaxDD">--</div>
+                <div class="sub">&nbsp;</div>
+            </div>
+            <div class="metric-col">
+                <div class="label">交易次数</div>
+                <div class="value val-white" id="mTradeCount">--</div>
+                <div class="sub">最近一年</div>
+            </div>
+        </div>
+
+        <!-- 图表 -->
+        <div class="chart-card">
+            <h3>收益率曲线对比</h3>
+            <div id="chart"></div>
+        </div>
+
+        <!-- 交易明细 -->
+        <div class="detail-card" id="tradeDetailCard">
+            <h3>交易明细</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th><th>操作</th><th>价格</th><th>数量（股）</th><th>单次收益</th>
+                    </tr>
+                </thead>
+                <tbody id="tradeTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- 底部说明 -->
+        <div class="footer-note">
+            <span>初始资金: <span style="color:var(--text-secondary);font-weight:600" id="fnCapital">100,000.00</span> 元</span>
+            <span><span class="footer-dot red"></span> 红三角: 买入</span>
+            <span><span class="footer-dot green"></span> 绿三角: 卖出</span>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============ 回测引擎 ============
+var INITIAL_CAPITAL = 100000;
+var chartInstance = null;
+var $ = function(id){return document.getElementById(id)};
+
+// 资金调节
+function adjustFund(delta){
+    var el = $('fundInput');
+    var v = parseInt(el.value.replace(/[^0-9]/g,'')) || INITIAL_CAPITAL;
+    v = Math.max(10000, Math.min(10000000, v + delta));
+    v = Math.round(v / 10000) * 10000;
+    el.value = v;
+}
+
+function validateFund(){
+    var el = $('fundInput');
+    var v = parseInt(el.value.replace(/[^0-9]/g,'')) || INITIAL_CAPITAL;
+    v = Math.max(10000, Math.min(10000000, v));
+    el.value = v;
+}
+
+function getFund(){
+    var v = parseInt($('fundInput').value.replace(/[^0-9]/g,''));
+    return v > 0 ? v : 100000;
+}
+
+// 回车触发
+$('symbolInput').addEventListener('keydown',function(e){if(e.key==='Enter')run()});
+
+// 输入代码时自动获取名称
+$('symbolInput').addEventListener('input',function(){
+    var val=this.value.trim();
+    if(val.length===6&&/^\d{6}$/.test(val))fetchName(val);
+    else $('nameInput').value='';
+});
+
+// ========== 数据获取 ==========
+function getMarket(s){
+    if(s.startsWith('6'))return'sh';
+    if(s.startsWith('0')||s.startsWith('3'))return'sz';
+    if(s.startsWith('8')||s.startsWith('4'))return'bj';
+    return'sh';
+}
+
+function fetchName(symbol){
+    var market=getMarket(symbol);
+    fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+market+symbol+',day,,,1,qfq')
+    .then(function(r){return r.json()})
+    .then(function(json){
+        var key=market+symbol;
+        if(json.data&&json.data[key]&&json.data[key].qt&&json.data[key].qt[key]){
+            $('nameInput').value=json.data[key].qt[key][1];
+        }
+    }).catch(function(){});
+}
+
+async function fetchKlineData(symbol){
+    var market=getMarket(symbol);
+    var param=market+symbol+',day,,,450,qfq';
+    var url='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+param;
+    var resp=await fetch(url);
+    if(!resp.ok)throw new Error('网络请求失败 HTTP '+resp.status);
+    var json=await resp.json();
+    if(json.code!==0||!json.data)throw new Error('腾讯行情接口返回异常');
+    var key=market+symbol;
+    var sd=json.data[key];
+    if(!sd||!sd.qfqday||sd.qfqday.length===0)throw new Error('未获取到K线数据，请检查股票代码');
+    var rows=[];
+    for(var i=0;i<sd.qfqday.length;i++){
+        var r=sd.qfqday[i];
+        rows.push({date:r[0],open:parseFloat(r[1]),close:parseFloat(r[2]),high:parseFloat(r[3]),low:parseFloat(r[4]),volume:parseFloat(r[5])});
+    }
+    var stockName=symbol;
+    if(sd.qt&&sd.qt[key]&&sd.qt[key].length>1)stockName=sd.qt[key][1];
+    return{rows:rows,stockName:stockName};
+}
+
+// ========== 指标计算 ==========
+function calcSMA(data,period){
+    var r=new Array(data.length).fill(null),s=0;
+    for(var i=0;i<data.length;i++){
+        s+=data[i];
+        if(i>=period)s-=data[i-period];
+        if(i>=period-1)r[i]=s/period;
+    }
+    return r;
+}
+
+function calculateSignals(rows){
+    var n=rows.length;
+    var closes=rows.map(function(r){return r.close});
+    var opens=rows.map(function(r){return r.open});
+    var ma18=calcSMA(closes,18),ma65=calcSMA(closes,65);
+    var BB=new Array(n).fill(false),SS=new Array(n).fill(false);
+    for(var i=19;i<n;i++){
+        if(ma18[i]===null||ma18[i-1]===null)continue;
+        var ci=closes[i],cp=closes[i-1],oi=opens[i],m=ma18[i],mp=ma18[i-1];
+        var cc=(ci>m)&&(cp<=mp),mc=(m>ci)&&(mp<=cp);
+        BB[i]=((ci>m)&&(ci/m>1.003)&&(m>mp)&&(m-mp>0.003))||(cc&&(ci/cp>=1.0994));
+        SS[i]=((ci<m)&&(ci<=oi)&&(m<mp)&&(mp-m>0.006))||(mc&&(m-ci>0.01)&&((cp-ci)/cp>=0.0994));
+    }
+    var posState=new Array(n).fill(0),state=0;
+    for(var i=0;i<n;i++){if(BB[i])state=1;else if(SS[i])state=0;posState[i]=state;}
+    return{ma18:ma18,ma65:ma65,BB:BB,SS:SS,posState:posState};
+}
+
+// ========== 回测仿真 ==========
+function runBacktest(rows,signals,capital){
+    var n=rows.length;if(n===0)throw new Error('无数据');
+    var today=new Date(),oneYearAgo=new Date(today);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
+    var btStartIdx=0;
+    for(var i=0;i<n;i++){if(new Date(rows[i].date)>=oneYearAgo){btStartIdx=i;break}}
+    if(btStartIdx===0)btStartIdx=Math.floor(n*0.4);
+    var prevPos=(btStartIdx>0)?signals.posState[btStartIdx-1]:0;
+    var btRows=rows.slice(btStartIdx);
+    var btBB=signals.BB.slice(btStartIdx),btSS=signals.SS.slice(btStartIdx);
+    var buySignal=[false].concat(btBB.slice(0,-1));
+    var sellSignal=[false].concat(btSS.slice(0,-1));
+
+    var cap=capital,shares=0,position=prevPos,trades=[],strategyEquity=[],lastBuyPrice=0;
+
+    if(position===1){
+        var fo=btRows[0].open;lastBuyPrice=fo;
+        var bs=Math.floor(cap/fo/100)*100;
+        if(bs>0){cap-=bs*fo;shares=bs;
+            trades.push({date:btRows[0].date,action:'期初建仓',price:r2(fo),shares:bs,singleReturn:null})}
+    }
+
+    var bhOpen=btRows[0].open;
+    var bhShares=Math.floor(capital/bhOpen/100)*100;
+    var bhCash=capital-bhShares*bhOpen,bhEquity=[];
+
+    for(var i=0;i<btRows.length;i++){
+        var row=btRows[i];
+        if(i===0&&position===1){}
+        else if(position===0&&buySignal[i]){
+            var bp=row.low;lastBuyPrice=bp;
+            var bs=Math.floor(cap/bp/100)*100;
+            if(bs>0){cap-=bs*bp;shares=bs;position=1;
+                trades.push({date:row.date,action:'买入',price:r2(bp),shares:bs,singleReturn:null})}
+        }else if(position===1&&sellSignal[i]){
+            var sp=row.high;
+            var sr=lastBuyPrice>0?r2((sp-lastBuyPrice)/lastBuyPrice*100):0;
+            cap+=shares*sp;
+            trades.push({date:row.date,action:'卖出',price:r2(sp),shares:shares,singleReturn:sr});
+            shares=0;position=0;
+        }
+        strategyEquity.push(cap+shares*row.close);
+        bhEquity.push(bhCash+bhShares*row.close);
+    }
+
+    if(position===1){
+        var lc=btRows[btRows.length-1].close;
+        var sr=lastBuyPrice>0?r2((lc-lastBuyPrice)/lastBuyPrice*100):0;
+        cap+=shares*lc;
+        trades.push({date:btRows[btRows.length-1].date,action:'期末平仓',price:r2(lc),shares:shares,singleReturn:sr});
+    }
+
+    var stratRet=strategyEquity.map(function(eq){return r2((eq/capital-1)*100)});
+    var bhRet=bhEquity.map(function(eq){return r2((eq/capital-1)*100)});
+
+    function maxDD(eq){
+        var peak=eq[0],dd=0;
+        for(var i=1;i<eq.length;i++){
+            if(eq[i]>peak)peak=eq[i];
+            var d=(eq[i]-peak)/peak*100;
+            if(d<dd)dd=d;
+        }
+        return r2(dd);
+    }
+
+    return{
+        dates:btRows.map(function(r){return r.date}),
+        strategyReturns:stratRet,bhReturns:bhRet,
+        strategyReturn:stratRet[stratRet.length-1],bhReturn:bhRet[bhRet.length-1],
+        strategyMaxDD:maxDD(strategyEquity),bhMaxDD:maxDD(bhEquity),
+        trades:trades,
+        tradeCount:trades.filter(function(t){return t.action==='买入'||t.action==='卖出'}).length
+    };
+}
+
+function r2(v){return Math.round(v*100)/100;}
+
+// ========== 主流程 ==========
+function run(){
+    var symbol=$('symbolInput').value.trim();
+    if(!/^\d{6}$/.test(symbol)){showError('请输入正确的6位纯数字股票代码');return}
+
+    INITIAL_CAPITAL=getFund();
+    $('btnStart').disabled=true;$('btnStart').textContent='回测中…';
+    $('loadingArea').classList.add('active');
+    $('resultsArea').classList.remove('active');
+    $('errorCard').classList.remove('active');
+
+    fetchKlineData(symbol)
+    .then(function(result){
+        $('nameInput').value=result.stockName;
+        $('loadingArea').querySelector('.loading-text').textContent=
+            '正在回测 '+result.stockName+' ('+symbol+')…';
+
+        var signals=calculateSignals(result.rows);
+        var backtest=runBacktest(result.rows,signals,INITIAL_CAPITAL);
+
+        $('btTitle').innerHTML=
+            '<span class="code">'+symbol+'</span>'+
+            '<span class="name">'+result.stockName+'</span>'+
+            ' 回测统计（最近一年）';
+        $('fnCapital').textContent=INITIAL_CAPITAL.toLocaleString('en-US',{minimumFractionDigits:2});
+
+        renderMetrics(backtest);
+        renderTrades(backtest.trades);
+        $('resultsArea').classList.add('active');
+        $('loadingArea').classList.remove('active');
+        renderChart(backtest);
+    })
+    .catch(function(e){
+        showError('回测失败: '+e.message+'\n建议: 可能是网络限制或接口维护，请切换网络或稍后再试。');
+    })
+    .finally(function(){
+        $('btnStart').disabled=false;$('btnStart').textContent='开始回测';
+    });
+}
+
+function showError(msg){
+    $('errorCard').textContent=msg;$('errorCard').classList.add('active');
+    $('loadingArea').classList.remove('active');
+}
+
+function renderMetrics(d){
+    var sRet=d.strategyReturn;
+    $('mStrategyReturn').textContent=(sRet>=0?'+':'')+sRet+'%';
+    $('mStrategyReturn').className='value '+(sRet>0?'val-red':sRet<0?'val-green':'val-white');
+    $('mStrategyDD').textContent='最大回撤: '+d.strategyMaxDD+'%';
+
+    $('mStrategyMaxDD').textContent=d.strategyMaxDD+'%';
+    $('mStrategyMaxDD').className='value val-green';
+
+    var bhRet=d.bhReturn;
+    $('mBhReturn').textContent=(bhRet>=0?'+':'')+bhRet+'%';
+    $('mBhReturn').className='value '+(bhRet>0?'val-red':bhRet<0?'val-green':'val-white');
+    $('mBhDD').textContent='最大回撤: '+d.bhMaxDD+'%';
+
+    $('mBhMaxDD').textContent=d.bhMaxDD+'%';
+    $('mBhMaxDD').className='value val-green';
+
+    $('mTradeCount').textContent=d.tradeCount;
+}
+
+function renderChart(d){
+    var c=$('chart');
+    if(chartInstance)chartInstance.dispose();
+    chartInstance=echarts.init(c,'dark');
+
+    var buyData=[],sellData=[],dates=d.dates;
+    d.trades.forEach(function(t){
+        var idx=dates.indexOf(t.date);if(idx<0)return;
+        if(t.action==='买入')buyData.push([t.date,d.strategyReturns[idx]]);
+        else if(t.action==='卖出')sellData.push([t.date,d.strategyReturns[idx]]);
+    });
+
+    chartInstance.setOption({
+        tooltip:{
+            trigger:'axis',
+            backgroundColor:'rgba(20,22,30,.95)',
+            borderColor:'#2a2d38',
+            textStyle:{color:'#e8e8e8',fontSize:13}
+        },
+        legend:{
+            data:['贝塔系统收益率','买入持有收益率'],
+            top:0,textStyle:{color:'#888c99',fontSize:12}
+        },
+        grid:{left:'60px',right:'30px',bottom:'28px',top:'40px'},
+        xAxis:{
+            type:'category',data:dates,boundaryGap:false,
+            axisLabel:{formatter:function(v){return v.substring(5)},fontSize:10,color:'#5a5e6b'},
+            axisLine:{lineStyle:{color:'#2a2d38'}}
+        },
+        yAxis:{
+            type:'value',name:'收益率 (%)',
+            nameTextStyle:{color:'#888c99',fontSize:11},
+            axisLabel:{formatter:'{value}%',color:'#5a5e6b'},
+            splitLine:{lineStyle:{color:'rgba(42,45,56,.4)'}}
+        },
+        series:[
+            {
+                name:'贝塔系统收益率',type:'line',data:d.strategyReturns,
+                smooth:false,symbol:'none',
+                lineStyle:{color:'#ff4d4f',width:2.5},z:1
+            },{
+                name:'买入持有收益率',type:'line',data:d.bhReturns,
+                smooth:false,symbol:'none',
+                lineStyle:{color:'#4096ff',width:2,type:'dashed'},z:1
+            },{
+                name:'买点',type:'scatter',data:buyData,
+                symbol:'triangle',symbolSize:14,
+                itemStyle:{color:'#ff4d4f'},z:10,
+                tooltip:{trigger:'item',formatter:function(p){return'<b>▲ 买入</b><br/>'+p.value[0]+'<br/>收益率: '+p.value[1]+'%'}}
+            },{
+                name:'卖点',type:'scatter',data:sellData,
+                symbol:'triangle',symbolSize:14,symbolRotate:180,
+                itemStyle:{color:'#52c41a'},z:10,
+                tooltip:{trigger:'item',formatter:function(p){return'<b>▼ 卖出</b><br/>'+p.value[0]+'<br/>收益率: '+p.value[1]+'%'}}
+            }
+        ]
+    });
+
+    window.addEventListener('resize',function(){if(chartInstance)chartInstance.resize()});
+}
+
+function renderTrades(trades){
+    var html='';
+    trades.forEach(function(t){
+        var tag='';
+        if(t.action==='买入')tag='<span class="tag tag-buy">买入</span>';
+        else if(t.action==='卖出')tag='<span class="tag tag-sell">卖出</span>';
+        else if(t.action==='期初建仓')tag='<span class="tag tag-info">期初建仓</span>';
+        else if(t.action==='期末平仓')tag='<span class="tag tag-info">期末平仓</span>';
+        var retStr=t.singleReturn!==null?(t.singleReturn>=0?'+':'')+t.singleReturn+'%':'--';
+        var retStyle=t.singleReturn!==null?(t.singleReturn>0?'color:#ff4d4f;':t.singleReturn<0?'color:#52c41a;':''):'';
+        html+='<tr><td>'+t.date+'</td><td>'+tag+'</td><td>'+t.price.toFixed(2)+'</td><td>'+t.shares+'</td><td style="'+retStyle+'font-weight:600;">'+retStr+'</td></tr>';
+    });
+    $('tradeTableBody').innerHTML=html||'<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">暂无交易记录</td></tr>';
+}
+
+// 初始加载
+fetchName('600519');
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){run()});
+else run();
+</script>
+</body>
+</html>
